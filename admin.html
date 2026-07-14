@@ -24,11 +24,13 @@
     <section class="login-panel">
       <p class="eyebrow">OWNER ACCESS</p>
       <h2>管理員登入</h2>
-      <p>統計資料受到登入驗證保護。系統會寄送一次性登入連結到管理員信箱。</p>
+      <p>統計資料受到登入驗證保護。請使用管理員專用密碼登入。</p>
       <form id="loginForm">
         <label for="adminEmail">管理員 Email</label>
         <input id="adminEmail" name="email" type="email" autocomplete="email" readonly>
-        <button id="loginButton" class="login-button" type="submit">寄送登入連結</button>
+        <label for="adminPassword">後台密碼</label>
+        <input id="adminPassword" name="password" type="password" autocomplete="current-password" required>
+        <button id="loginButton" class="login-button" type="submit">登入後台</button>
       </form>
       <p id="loginMessage" class="login-message" aria-live="polite"></p>
     </section>
