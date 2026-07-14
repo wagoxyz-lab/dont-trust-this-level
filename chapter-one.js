@@ -13,6 +13,7 @@
       tone,
       die,
       completeLevel,
+      triggerSystemError,
       hit
     } = api;
 
@@ -20,13 +21,12 @@
       'tutorial-move': '這關的陷阱是希望你會走路。',
       'tutorial-traps': '我介紹的是尖刺，不是讓你收集尖刺。',
       'tutorial-jump': '缺口沒有變寬，你倒是掉得越來越準。',
-      'tutorial-pause': '白框只是白框，是你自己第六次相信它。',
-      'tutorial-missing-door': '門已經回去等你了，它甚至沒有不耐煩。'
+      'tutorial-pause': '白框只是白框，是你自己第六次相信它。'
     };
 
-    const level = (id, title, build) => Object.assign(
+    const level = (id, title, build, metadata = {}) => Object.assign(
       () => ({ id, title, corruption: 0, taunt: deathTaunts[id], ...build() }),
-      { id, title }
+      { id, title, ...metadata }
     );
 
     const standingOn = (player, piece) => (
@@ -94,7 +94,7 @@
           spike(350, 432, 40, 28, {
             death: {
               title: '這也撞得到？',
-              reason: '你碰到了第一根尖刺。',
+              reason: '你碰到了眼前的尖刺。',
               comment: '它一直都在那裡。',
               variant: 'careless'
             }
@@ -180,78 +180,58 @@
         zone: { x: 310, y: 414, w: 76, h: 46, mode: 'stop', active: true },
         platforms: [platform(0, FLOOR_Y, W, 80)],
         spikes: [],
-        crusher: { x: 0, y: 70, w: 70, h: 390, active: false },
+        crusher: { x: -80, y: 70, w: 70, h: 390, active: false, speed: 330 },
         update(s, dt) {
           const player = getPlayer();
-
-          if (player.x > 270 && !s.crusher.active) {
-            s.crusher.active = true;
-            s.crusher.x = player.x - 250;
-          }
-          if (!s.crusher.active) return;
-
           const center = player.x + player.w / 2;
           const inside = center > s.zone.x && center < s.zone.x + s.zone.w;
           const stopped = inside && player.grounded && Math.abs(player.vx) < 18;
-          s.stopTime = stopped ? (s.stopTime || 0) + dt : 0;
-          if (s.stopTime >= .2) s.obeyedHint = true;
+          if (stopped) s.obeyedHint = true;
 
-          s.crusher.x += 205 * dt;
-          if (player.x > s.zone.x + s.zone.w + 30) s.zone.active = false;
+          if (!s.chaseStarted && center >= s.zone.x) {
+            s.chaseStarted = true;
+            s.crusher.active = true;
+            tone(120, .1);
+          }
+          if (!s.crusher.active) return;
+
+          s.crusher.speed = Math.min(430, s.crusher.speed + 60 * dt);
+          s.crusher.x += s.crusher.speed * dt;
+          if (player.x > s.zone.x + s.zone.w + 30 && s.zone.active) {
+            s.zone.active = false;
+            if (!s.obeyedHint) say('……你居然沒有停。', 0, true);
+          }
           if (hit(player, s.crusher)) {
-            die(s.obeyedHint ? '不要永遠相信提示。' : '後面的東西追上來了。');
+            die(s.obeyedHint ? '你真的照提示停下來了。' : '你中途慢下來了。');
           }
         }
       })),
 
-      level('tutorial-missing-door', '門呢？', () => ({
-        hint: '它應該就在右邊。',
-        spawn: [80, 418],
-        goal: { x: 20, y: 384, w: 46, h: 76, hidden: true },
-        platforms: [
-          platform(0, FLOOR_Y, W, 80),
-          platform(0, 0, 12, FLOOR_Y, { invisible: true }),
-          platform(W - 12, 0, 12, FLOOR_Y, { invisible: true })
-        ],
+      level('tutorial-missing-level', '不存在的關卡', () => ({
+        hint: '因為某些錯誤，這個關卡已被刪除了。',
+        spawn: [70, 418],
+        goal: { x: 860, y: 384, w: 46, h: 76 },
+        manualGoal: true,
+        platforms: [platform(0, FLOOR_Y, W, 80)],
         spikes: [],
         update(s) {
           const player = getPlayer();
           const time = getLevelTime();
 
-          if (!s.questionedDoor && (time >= 3.5 || (time >= 2.2 && player.x > 280))) {
-            s.questionedDoor = true;
-            s.questionedAt = time;
-            say('……這道門在哪裡？');
+          if (!s.explained && time >= 3.8) {
+            s.explained = true;
+            say('……但我們還是進來了。這不應該發生。', 0, true);
           }
-          if (s.questionedDoor && !s.missingNoticed && time - s.questionedAt >= 3.2) {
-            s.missingNoticed = true;
-            s.missingAt = time;
-            s.jumpsWhenNoticed = player.jumps;
-            say('門好像自己消失了。');
+          if (hit(player, s.goal) && !s.doorChecked) {
+            s.doorChecked = true;
+            say('這道門沒有連到任何地方。', 0, true);
           }
-
-          const jumpsSinceNotice = player.jumps - (s.jumpsWhenNoticed || 0);
-          if (s.missingNoticed && jumpsSinceNotice > 0 && jumpsSinceNotice < 3 && jumpsSinceNotice !== s.lastJumpEcho) {
-            s.lastJumpEcho = jumpsSinceNotice;
-            tone(520 + jumpsSinceNotice * 90, .06);
-          }
-          if (s.missingNoticed && jumpsSinceNotice >= 3 && s.goal.hidden) {
-            s.goal.hidden = false;
-            say('……剛才那裡有東西亮了一下。');
-            tone(540, .1);
-          }
-
-          if (s.goal.hidden && s.missingNoticed && time - s.missingAt >= 3.4 && !s.tutorialStarted) {
-            s.tutorialStarted = true;
-            s.tutorialAt = time;
-            say('不然先來個基本教學。');
-          }
-          if (s.goal.hidden && s.tutorialStarted && time - s.tutorialAt >= 3.2 && !s.jumpHinted) {
-            s.jumpHinted = true;
-            say('說到跳躍，可以多跳幾下。');
+          if (!s.errorTriggered && time >= 8.5) {
+            s.errorTriggered = true;
+            triggerSystemError();
           }
         }
-      }))
+      }), { secret: true })
     ];
   };
 })();
