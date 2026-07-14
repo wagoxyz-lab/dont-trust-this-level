@@ -24,6 +24,18 @@ h2 { margin-top: 4px; font-size: 18px; letter-spacing: 0; }
 .mode-badge, .game-link { min-height: 36px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--line); color: var(--muted); font-size: 13px; text-decoration: none; }
 .mode-badge span { width: 7px; height: 7px; border-radius: 50%; background: var(--coral); box-shadow: 0 0 0 3px rgba(255,104,83,.15); }
 .game-link:hover { border-color: var(--acid); color: var(--acid); }
+.button-link { background: transparent; cursor: pointer; }
+
+.login-main { min-height: calc(100vh - 93px); display: grid; place-items: center; padding: 28px 20px; }
+.login-panel { width: min(430px, 100%); padding: 30px; border: 1px solid var(--line); border-top: 3px solid var(--acid); border-radius: 6px; background: var(--surface); }
+.login-panel h2 { margin-top: 8px; font-size: 25px; }
+.login-panel > p:not(.eyebrow) { margin-top: 14px; color: var(--muted); font-size: 14px; line-height: 1.65; }
+.login-panel form { margin-top: 24px; display: grid; gap: 10px; }
+.login-panel label { color: var(--muted); font-size: 12px; font-weight: 700; }
+.login-panel input { width: 100%; height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 0; background: #11120f; color: var(--text); }
+.login-button { height: 44px; margin-top: 4px; border: 0; background: var(--acid); color: #11120f; font-weight: 850; cursor: pointer; }
+.login-button:disabled { opacity: .55; cursor: wait; }
+.login-message { min-height: 21px; color: var(--acid) !important; }
 
 .admin-main { width: min(1180px, calc(100% - 48px)); margin: 0 auto; padding: 28px 0 52px; }
 .notice { min-height: 48px; display: flex; align-items: center; gap: 16px; padding: 12px 16px; border-left: 3px solid var(--coral); background: #191814; color: var(--muted); font-size: 13px; }
@@ -66,6 +78,8 @@ h2 { margin-top: 4px; font-size: 18px; letter-spacing: 0; }
 .funnel-step small { display: block; margin-top: 7px; color: var(--muted); }
 .clear-button { height: 34px; padding: 0 11px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
 .clear-button:hover { border-color: var(--coral); color: var(--coral); }
+.last-updated { color: var(--muted); font-size: 12px; }
+[hidden] { display: none !important; }
 
 @media (max-width: 820px) {
   .metrics { grid-template-columns: repeat(2, 1fr); }
