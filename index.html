@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#11110f">
+  <title>別信這一關</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="game-shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>別信這一關</span>
+      </div>
+      <div class="status" aria-live="polite">
+        <span id="levelLabel">第 1 關</span>
+        <span class="divider"></span>
+        <span>死亡 <strong id="deathCount">0</strong></span>
+      </div>
+      <div class="actions">
+        <select id="levelSelect" class="level-select" aria-label="跳到指定關卡" title="跳到指定關卡">
+        </select>
+        <button id="soundButton" class="icon-button" type="button" aria-label="切換音效" title="切換音效">
+          <span id="soundIcon">♪</span>
+        </button>
+        <button id="restartButton" class="icon-button" type="button" aria-label="重新開始本關" title="重新開始本關">↻</button>
+      </div>
+    </header>
+
+    <section class="stage" aria-label="遊戲區域">
+      <canvas id="game" width="960" height="540"></canvas>
+      <div id="message" class="message" aria-live="polite"></div>
+      <div id="deathPanel" class="death-panel" role="status" aria-live="assertive" hidden>
+        <p class="eyebrow">死亡原因</p>
+        <h2>你死了</h2>
+        <p id="deathReason"></p>
+      </div>
+      <div id="chapterPanel" class="chapter-panel">
+        <div class="chapter-menu">
+          <div class="chapter-heading">
+            <p class="eyebrow">選擇章節</p>
+            <h1>別信這一關</h1>
+            <p id="chapterNotice" class="chapter-notice" aria-live="polite">完成第一章後，其他章節才會開放。</p>
+          </div>
+          <ol class="chapter-list" aria-label="遊戲章節">
+            <li>
+              <button id="chapterOneButton" class="chapter-button chapter-button-active" type="button">
+                <span class="chapter-number">01</span>
+                <span class="chapter-name">新手教學</span>
+                <span class="chapter-status">5 關 · 開始</span>
+              </button>
+            </li>
+            <li>
+              <button id="chapterTwoButton" class="chapter-button" type="button" disabled>
+                <span class="chapter-number">02</span>
+                <span class="chapter-name">？？？</span>
+                <span id="chapterTwoStatus" class="chapter-status">未解鎖</span>
+              </button>
+            </li>
+            <li>
+              <button class="chapter-button" type="button" disabled>
+                <span class="chapter-number">03</span>
+                <span class="chapter-name">？？？</span>
+                <span class="chapter-status">未解鎖</span>
+              </button>
+            </li>
+            <li>
+              <button class="chapter-button" type="button" disabled>
+                <span class="chapter-number">04</span>
+                <span class="chapter-name">？？？</span>
+                <span class="chapter-status">未解鎖</span>
+              </button>
+            </li>
+            <li>
+              <button class="chapter-button" type="button" disabled>
+                <span class="chapter-number">05</span>
+                <span class="chapter-name">？？？</span>
+                <span class="chapter-status">未解鎖</span>
+              </button>
+            </li>
+            <li>
+              <button class="chapter-button" type="button" disabled>
+                <span class="chapter-number">06</span>
+                <span class="chapter-name">？？？</span>
+                <span class="chapter-status">未解鎖</span>
+              </button>
+            </li>
+          </ol>
+        </div>
+        <div class="key-guide">
+          <span><kbd>A</kbd><kbd>D</kbd> 移動</span>
+          <span><kbd>W</kbd> / <kbd>Space</kbd> 跳躍</span>
+          <span><kbd>R</kbd> 重來</span>
+          <span><kbd>[</kbd><kbd>]</kbd> 前後跳關</span>
+        </div>
+      </div>
+      <div id="checkpointPanel" class="finish-panel" hidden>
+        <p class="eyebrow">章節完成</p>
+        <h2>第一章完成</h2>
+        <p>你通過了新手教學。這次死亡 <strong id="finalDeaths">0</strong> 次。</p>
+        <div class="finish-actions">
+          <button id="againButton" class="primary-button" type="button">重玩第一章</button>
+          <button id="chapterReturnButton" class="secondary-button" type="button">回到章節</button>
+        </div>
+      </div>
+    </section>
+
+    <nav class="touch-controls" aria-label="觸控操作">
+      <div class="move-controls">
+        <button class="touch-button" data-control="left" aria-label="向左">←</button>
+        <button class="touch-button" data-control="right" aria-label="向右">→</button>
+      </div>
+      <div class="action-controls">
+        <button class="touch-button jump-button" data-control="jump" aria-label="跳躍">↑</button>
+      </div>
+    </nav>
+  </main>
+  <script src="chapter-one.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
