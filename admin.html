@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#10110f">
+  <title>遊戲數據台 · 別信這一關</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <header class="admin-header">
+    <div>
+      <p class="eyebrow">DONT TRUST THIS LEVEL</p>
+      <h1>遊戲數據台</h1>
+    </div>
+    <div class="header-actions">
+      <span class="mode-badge"><span></span>本機測試數據</span>
+      <a class="game-link" href="index.html">返回遊戲</a>
+    </div>
+  </header>
+
+  <main class="admin-main">
+    <section class="notice" aria-label="資料模式說明">
+      <strong>目前顯示這台裝置的測試數據</strong>
+      <span>雲端資料接口已預留；接上統計服務後，這裡會顯示所有線上玩家。</span>
+    </section>
+
+    <section class="metrics" aria-label="關鍵指標">
+      <article class="metric">
+        <span class="metric-label">不重複玩家</span>
+        <strong id="playersMetric">0</strong>
+        <small>依瀏覽器識別</small>
+      </article>
+      <article class="metric">
+        <span class="metric-label">總造訪</span>
+        <strong id="visitsMetric">0</strong>
+        <small id="recentVisits">最近 7 天 0 次</small>
+      </article>
+      <article class="metric metric-accent">
+        <span class="metric-label">開始遊玩</span>
+        <strong id="startsMetric">0</strong>
+        <small id="visitToPlay">造訪轉換率 0%</small>
+      </article>
+      <article class="metric">
+        <span class="metric-label">完成章節</span>
+        <strong id="completionsMetric">0</strong>
+        <small id="overallRate">整體通過率 0%</small>
+      </article>
+    </section>
+
+    <section class="dashboard-grid">
+      <article class="panel activity-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">ACTIVITY</p>
+            <h2>近 7 日造訪</h2>
+          </div>
+          <span id="activityTotal" class="panel-value">0</span>
+        </div>
+        <div id="activityChart" class="activity-chart" aria-label="近七日造訪長條圖"></div>
+      </article>
+
+      <article class="panel rate-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">PASS RATE</p>
+            <h2>章節通過率</h2>
+          </div>
+        </div>
+        <div id="chapterRates" class="chapter-rates"></div>
+      </article>
+    </section>
+
+    <section class="panel funnel-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">FUNNEL</p>
+          <h2>玩家流程</h2>
+        </div>
+        <button id="clearDataButton" class="clear-button" type="button">清除測試數據</button>
+      </div>
+      <div id="funnel" class="funnel"></div>
+    </section>
+  </main>
+
+  <script src="analytics.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>
