@@ -120,13 +120,18 @@
   $('#loginForm').addEventListener('submit', async event => {
     event.preventDefault();
     $('#loginButton').disabled = true;
-    $('#loginMessage').textContent = '正在寄送驗證信...';
-    const { error } = await client.auth.signInWithOtp({
+    $('#loginMessage').textContent = '正在驗證管理員身分...';
+    const { data, error } = await client.auth.signInWithPassword({
       email: config.adminEmail,
-      options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}` }
+      password: $('#adminPassword').value
     });
     $('#loginButton').disabled = false;
-    $('#loginMessage').textContent = error ? '寄送失敗，請稍後再試。' : '登入連結已寄出，請到信箱收信。';
+    if (error) {
+      $('#loginMessage').textContent = 'Email 或密碼不正確。';
+      return;
+    }
+    $('#adminPassword').value = '';
+    await showSession(data.session);
   });
   $('#signOutButton').addEventListener('click', async () => {
     await client.auth.signOut();
