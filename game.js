@@ -23,6 +23,7 @@
   const deathCount = document.querySelector('#deathCount');
   const finalDeaths = document.querySelector('#finalDeaths');
   const message = document.querySelector('#message');
+  const systemErrorPanel = document.querySelector('#systemErrorPanel');
   const soundIcon = document.querySelector('#soundIcon');
   const levelSelect = document.querySelector('#levelSelect');
 
@@ -55,7 +56,7 @@
   let activeCheckpoint = null;
   const levelMemory = new Map();
   const seenStory = new Set();
-  const chapterProgressKey = 'dont-trust-this-level:chapter-1:v2';
+  const chapterProgressKey = 'dont-trust-this-level:chapter-1:v3';
   let chapterOneComplete = loadChapterProgress();
 
   const platform = (x, y, w, h = 24, extra = {}) => ({ x, y, w, h, active: true, ...extra });
@@ -74,6 +75,7 @@
     tone,
     die,
     completeLevel,
+    triggerSystemError,
     hit,
     updateCrumble,
     setLevelLabel: text => { levelLabel.textContent = text; }
@@ -89,7 +91,12 @@
     chapter.factories.forEach((factory, index) => {
       const option = document.createElement('option');
       option.value = `${chapterIndex}:${index}`;
-      option.textContent = `${chapter.number}-${index + 1}`;
+      option.textContent = factory.secret
+        ? `${chapter.number}-${index + 1}（已刪除）`
+        : `${chapter.number}-${index + 1}`;
+      option.dataset.chapter = String(chapterIndex);
+      option.dataset.secret = factory.secret ? 'true' : 'false';
+      option.disabled = Boolean(factory.secret || (chapterIndex > 0 && !chapterOneComplete));
       levelSelect.append(option);
     });
   });
@@ -99,6 +106,7 @@
     transitionTimer = null;
     pendingDeath = null;
     deathPanel.hidden = true;
+    systemErrorPanel.hidden = true;
     if (!preserveMessage) {
       messageQueue = [];
       messageTimer = 0;
@@ -117,7 +125,7 @@
     player = {
       x: spawn[0], y: spawn[1], w: PLAYER_SIZE, h: PLAYER_SIZE,
       vx: 0, vy: 0, grounded: false, jumpHeld: keys.jump, jumps: 0,
-      dead: false
+      dead: false, dying: false
     };
     levelTime = 0;
     particles = [];
@@ -143,7 +151,7 @@
     particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 800 * dt; p.life -= dt; });
     particles = particles.filter(p => p.life > 0);
     updateMessage(dt);
-    if (!started || player.dead || checkpointPanel.hidden === false) return;
+    if (!started || player.dead || player.dying || checkpointPanel.hidden === false) return;
     levelTime += dt;
 
     updateMovingPlatforms(dt);
@@ -165,7 +173,7 @@
     movePlayer(player.vx * dt, player.vy * dt);
     state.update?.(state, dt);
     updateCamera(dt);
-    if (player.dead) return;
+    if (player.dead || player.dying) return;
     updateCollectibles();
 
     for (const sp of state.spikes) {
@@ -175,7 +183,7 @@
     }
 
     if (player.y > H + 80 || player.x < -100 || player.x > (state.width || W) + 100) die('你離開了關卡範圍。');
-    if (player.dead) return;
+    if (player.dead || player.dying) return;
     updateCheckpoints();
     if (!state.manualGoal && state.goal.active !== false && !state.goal.locked && !state.goal.hidden && hit(player, state.goal)) completeLevel();
   }
@@ -264,11 +272,21 @@
   function hit(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
 
   function die(reason) {
-    if (player.dead) return;
+    if (player.dead || player.dying) return;
+    player.dying = true;
+    player.vx = 0;
+    player.vy = 0;
+    tone(110, .08);
+    transitionTimer = setTimeout(() => finishDeath(reason), 350);
+  }
+
+  function finishDeath(reason) {
+    if (!player?.dying) return;
     const presentation = typeof reason === 'string' ? { reason } : reason;
     state.memory.deaths = (state.memory.deaths || 0) + 1;
     const taunt = state.memory.deaths > 5 && !state.memory.tauntShown ? state.taunt : null;
     if (taunt) state.memory.tauntShown = true;
+    player.dying = false;
     player.dead = true;
     deaths += 1;
     deathCount.textContent = deaths;
@@ -296,7 +314,7 @@
   }
 
   function completeLevel() {
-    if (player.dead) return;
+    if (player.dead || player.dying) return;
     player.dead = true; tone(660, .08); setTimeout(() => tone(880, .12), 90);
     if (levelIndex === levelFactories.length - 1) {
       window.gameAnalytics?.track('chapter_complete', {
@@ -321,9 +339,26 @@
     finishTitle.textContent = activeChapterIndex === 0 ? '第一章完成' : '第二章目前完成';
     finishSummary.textContent = activeChapterIndex === 0
       ? '第二章「新手教學成果驗收」已解鎖。'
-      : '目前開放至 2-1，後續驗收會逐關加入。';
+      : '目前開放至 2-5，後續驗收會逐關加入。';
     againButton.textContent = `重玩第${chapter.number === 1 ? '一' : '二'}章`;
     checkpointPanel.hidden = false;
+  }
+
+  function triggerSystemError() {
+    if (!started || systemErrorPanel.hidden === false) return;
+    started = false;
+    messageQueue = [];
+    messageTimer = 0;
+    message.classList.remove('visible');
+    Object.keys(keys).forEach(key => { keys[key] = false; });
+    systemErrorPanel.hidden = false;
+    tone(75, .28);
+    transitionTimer = setTimeout(() => {
+      chapterOneComplete = true;
+      saveChapterProgress();
+      updateChapterLocks();
+      startChapter(1);
+    }, 2400);
   }
 
   function draw() {
@@ -358,6 +393,10 @@
     if (state.signal) drawSignal(state.signal);
     if (state.wind) drawWind(state.wind);
     if (state.collectibles?.length) drawCollectibleCounter();
+    if (player.dying) {
+      ctx.fillStyle = 'rgba(255, 91, 69, .12)';
+      ctx.fillRect(0, 0, W, H);
+    }
   }
 
   function drawGrid(worldWidth) {
@@ -419,16 +458,29 @@
   }
 
   function drawSpikes(sp) {
-    if (!sp.active || sp.hidden) return;
+    if (sp.hidden || (!sp.active && !sp.vanishing)) return;
+    const vanishRatio = sp.vanishing
+      ? Math.max(0, sp.vanishTimer / sp.vanishDuration)
+      : 1;
     const count = Math.max(1, Math.round(sp.w / 28));
     const sw = sp.w / count;
-    ctx.fillStyle = colors.danger;
+    ctx.save();
+    ctx.globalAlpha = sp.vanishing ? Math.max(.15, vanishRatio) : 1;
+    ctx.fillStyle = sp.vanishing && Math.floor(elapsed * 28) % 2 === 0
+      ? colors.acid
+      : sp.vanishing ? colors.solid : colors.danger;
     for (let i = 0; i < count; i++) {
       ctx.beginPath();
       if (sp.upside) { ctx.moveTo(sp.x + i * sw, sp.y); ctx.lineTo(sp.x + (i + .5) * sw, sp.y + sp.h); ctx.lineTo(sp.x + (i + 1) * sw, sp.y); }
       else { ctx.moveTo(sp.x + i * sw, sp.y + sp.h); ctx.lineTo(sp.x + (i + .5) * sw, sp.y); ctx.lineTo(sp.x + (i + 1) * sw, sp.y + sp.h); }
       ctx.closePath(); ctx.fill();
+      if (sp.vanishing) {
+        ctx.strokeStyle = colors.acid;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
     }
+    ctx.restore();
   }
 
   function drawGoal(g) {
@@ -440,9 +492,23 @@
   }
 
   function drawCrusher(c) {
-    ctx.fillStyle = colors.danger; ctx.fillRect(c.x, c.y, c.w, c.h);
+    const baseWidth = Math.min(24, c.w * .4);
+    const spikeHeight = 30;
+    ctx.fillStyle = colors.danger;
+    ctx.fillRect(c.x, c.y, baseWidth, c.h);
+    for (let y = c.y; y < c.y + c.h; y += spikeHeight) {
+      const bottom = Math.min(y + spikeHeight, c.y + c.h);
+      ctx.beginPath();
+      ctx.moveTo(c.x + baseWidth - 1, y);
+      ctx.lineTo(c.x + c.w, (y + bottom) / 2);
+      ctx.lineTo(c.x + baseWidth - 1, bottom);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.fillStyle = colors.ink;
-    for (let y = c.y + 14; y < c.y + c.h; y += 36) ctx.fillRect(c.x + 10, y, c.w - 20, 8);
+    for (let y = c.y + 12; y < c.y + c.h; y += 30) {
+      ctx.fillRect(c.x + 6, y, baseWidth - 12, 6);
+    }
   }
 
   function drawZone(zone) {
@@ -639,13 +705,24 @@
     chapterTwoButton.classList.remove('chapter-button-active');
     if (chapterOneComplete) chapterTwoButton.classList.add('chapter-button-active');
     chapterTwoName.textContent = chapterOneComplete ? chapters[1].title : '？？？';
-    chapterTwoStatus.textContent = chapterOneComplete ? '1 關 · 開始' : '請先完成前置關卡';
+    chapterTwoStatus.textContent = chapterOneComplete
+      ? `${chapters[1].factories.length} 關 · 開始`
+      : '請先完成前置關卡';
     chapterNotice.textContent = chapterOneComplete
       ? '第二章「新手教學成果驗收」已解鎖。'
       : '完成第一章後，其他章節才會開放。';
+    levelSelect.querySelectorAll('option').forEach(option => {
+      const chapterIndex = Number(option.dataset.chapter);
+      const secret = option.dataset.secret === 'true';
+      option.disabled = secret || (chapterIndex > 0 && !chapterOneComplete);
+    });
   }
 
   function startChapter(chapterIndex) {
+    if (chapterIndex > 0 && !chapterOneComplete) {
+      chapterNotice.textContent = '請先完成第一章。';
+      return;
+    }
     activeChapterIndex = Math.max(0, Math.min(chapters.length - 1, chapterIndex));
     levelFactories = chapters[activeChapterIndex].factories;
     levelIndex = 0;
@@ -689,6 +766,10 @@
   }
 
   function jumpToChapterLevel(chapterIndex, index) {
+    if (chapterIndex > 0 && !chapterOneComplete) {
+      levelSelect.value = `${activeChapterIndex}:${levelIndex}`;
+      return;
+    }
     activeChapterIndex = Math.max(0, Math.min(chapters.length - 1, chapterIndex));
     levelFactories = chapters[activeChapterIndex].factories;
     jumpToLevel(index);
