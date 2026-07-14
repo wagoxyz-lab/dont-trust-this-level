@@ -40,15 +40,16 @@
     return [
       level('tutorial-move', '左右移動', () => ({
         hint: '嗨，我是提示。接下來我會幫助你，先聽我說完。',
+        persistentHint: true,
         spawn: [70, 418],
         goal: { x: 860, y: 384, w: 46, h: 76 },
         manualGoal: true,
         doorPositions: [70, 730, 260, 620],
         doorDialogues: [
-          '很好，你有在聽。只是門跑回起點了。',
-          '我沒有叫它再跑。去右邊看看。',
-          '它好像知道你在找它。',
-          '好，這次我看著它。應該不會再跑了。'
+          '這個門似乎有點調皮。',
+          '門說你身上有股怪味，不想讓你靠近。',
+          '先去洗個澡再回來吧。',
+          '門玩累了。'
         ],
         platforms: [platform(0, FLOOR_Y, W, 80)],
         spikes: [],
@@ -58,11 +59,11 @@
 
           if (!s.introFinished && time >= 4.8) {
             s.introFinished = true;
-            say('好了。現在先走到右邊的門。');
+            say('現在，走到右邊的門。', Infinity, true);
           }
           if (s.teleportCount > 0 && !s.waitingComment && time - s.lastTeleportAt >= 6) {
             s.waitingComment = true;
-            say('你在等它自己回來嗎？它目前沒有這個打算。');
+            say('你在等它自己回來嗎？它目前不會自己回來。', Infinity, true);
           }
           if (!hit(player, s.goal) || time < (s.touchReadyAt || 0)) return;
           if (!s.introFinished) {
@@ -80,7 +81,7 @@
           s.lastTeleportAt = time;
           s.waitingComment = false;
           s.touchReadyAt = time + .35;
-          say(s.doorDialogues[index], 0, true);
+          say(s.doorDialogues[index], Infinity, true);
         }
       })),
 
@@ -116,7 +117,7 @@
 
           if (player.x > 170 && !s.firstInstruction) {
             s.firstInstruction = true;
-            say('先跳過你看得到的那一個。', 0, true);
+            say('跳過去，然後走到終點。', 0, true);
           }
           if (
             hiddenSpike.hidden &&
@@ -124,7 +125,7 @@
             playerCenter <= hiddenSpike.x + hiddenSpike.w
           ) {
             hiddenSpike.hidden = false;
-            say('我只介紹了第一個。', 0, true);
+            say('他的同伴也來了。', 0, true);
             tone(180, .06);
           }
           if (player.x > 560 && !s.passedSpikes) {
