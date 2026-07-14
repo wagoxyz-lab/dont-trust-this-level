@@ -2,14 +2,15 @@
   'use strict';
 
   const $ = selector => document.querySelector(selector);
+  const config = window.GAME_CLOUD_CONFIG;
+  const client = window.supabase.createClient(config.url, config.publishableKey);
   const percent = (value, total) => total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
 
   function dayKey(date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   }
 
-  function render() {
-    const events = window.gameAnalytics.getEvents();
+  function render(events) {
     const visits = events.filter(event => event.type === 'visit');
     const starts = events.filter(event => event.type === 'chapter_start');
     const completions = events.filter(event => event.type === 'chapter_complete');
@@ -78,9 +79,59 @@
     `).join('');
   }
 
-  $('#clearDataButton').addEventListener('click', () => {
-    if (window.confirm('確定清除這台裝置上的所有測試統計嗎？')) window.gameAnalytics.clear();
+  async function loadDashboard() {
+    const { data, error } = await client
+      .from('analytics_events')
+      .select('event_type, player_id, occurred_at, chapter, deaths, page_path')
+      .order('occurred_at', { ascending: true })
+      .limit(10000);
+    if (error) throw error;
+    const events = data.map(row => ({
+      type: row.event_type,
+      playerId: row.player_id,
+      timestamp: row.occurred_at,
+      data: { chapter: row.chapter, deaths: row.deaths, path: row.page_path }
+    }));
+    render(events);
+    $('#lastUpdated').textContent = `更新於 ${new Intl.DateTimeFormat('zh-TW', { hour: '2-digit', minute: '2-digit' }).format(new Date())}`;
+  }
+
+  async function showSession(session) {
+    const email = session?.user?.email?.toLowerCase();
+    const allowed = email === config.adminEmail.toLowerCase();
+    $('#loginView').hidden = allowed;
+    $('#dashboardView').hidden = !allowed;
+    $('#signOutButton').hidden = !session;
+    if (allowed) {
+      $('#modeBadge').innerHTML = '<span></span>管理員已驗證';
+      try {
+        await loadDashboard();
+      } catch {
+        $('#dashboardView').hidden = true;
+        $('#loginView').hidden = false;
+        $('#loginMessage').textContent = '無法讀取統計資料，請稍後再試。';
+      }
+    } else if (session) {
+      $('#loginMessage').textContent = '這個帳號沒有管理員權限。';
+    }
+  }
+
+  $('#adminEmail').value = config.adminEmail;
+  $('#loginForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    $('#loginButton').disabled = true;
+    $('#loginMessage').textContent = '正在寄送驗證信...';
+    const { error } = await client.auth.signInWithOtp({
+      email: config.adminEmail,
+      options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}` }
+    });
+    $('#loginButton').disabled = false;
+    $('#loginMessage').textContent = error ? '寄送失敗，請稍後再試。' : '登入連結已寄出，請到信箱收信。';
   });
-  window.addEventListener('game-analytics-update', render);
-  render();
+  $('#signOutButton').addEventListener('click', async () => {
+    await client.auth.signOut();
+    window.location.reload();
+  });
+  client.auth.onAuthStateChange((_event, session) => { showSession(session); });
+  client.auth.getSession().then(({ data }) => showSession(data.session));
 })();
