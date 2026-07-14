@@ -51,14 +51,14 @@
               <button id="chapterOneButton" class="chapter-button chapter-button-active" type="button">
                 <span class="chapter-number">01</span>
                 <span class="chapter-name">新手教學</span>
-                <span class="chapter-status">5 關 · 開始</span>
+                <span class="chapter-status">4 關 · 開始</span>
               </button>
             </li>
             <li>
               <button id="chapterTwoButton" class="chapter-button" type="button" disabled>
                 <span class="chapter-number">02</span>
-                <span class="chapter-name">？？？</span>
-                <span id="chapterTwoStatus" class="chapter-status">未解鎖</span>
+                <span id="chapterTwoName" class="chapter-name">？？？</span>
+                <span id="chapterTwoStatus" class="chapter-status">請先完成前置關卡</span>
               </button>
             </li>
             <li>
@@ -99,9 +99,9 @@
         </div>
       </div>
       <div id="checkpointPanel" class="finish-panel" hidden>
-        <p class="eyebrow">章節完成</p>
-        <h2>第一章完成</h2>
-        <p>你通過了新手教學。這次死亡 <strong id="finalDeaths">0</strong> 次。</p>
+        <p id="finishEyebrow" class="eyebrow">章節完成</p>
+        <h2 id="finishTitle">第一章完成</h2>
+        <p><span id="finishSummary">第二章「新手教學成果驗收」已解鎖。</span> 這次死亡 <strong id="finalDeaths">0</strong> 次。</p>
         <div class="finish-actions">
           <button id="againButton" class="primary-button" type="button">重玩第一章</button>
           <button id="chapterReturnButton" class="secondary-button" type="button">回到章節</button>
@@ -119,7 +119,9 @@
       </div>
     </nav>
   </main>
+  <script src="analytics.js"></script>
   <script src="chapter-one.js"></script>
+  <script src="chapter-two.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
