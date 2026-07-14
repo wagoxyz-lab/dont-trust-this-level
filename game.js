@@ -11,7 +11,9 @@
   const checkpointPanel = document.querySelector('#checkpointPanel');
   const chapterReturnButton = document.querySelector('#chapterReturnButton');
   const deathPanel = document.querySelector('#deathPanel');
+  const deathTitle = document.querySelector('#deathTitle');
   const deathReason = document.querySelector('#deathReason');
+  const deathComment = document.querySelector('#deathComment');
   const levelLabel = document.querySelector('#levelLabel');
   const deathCount = document.querySelector('#deathCount');
   const finalDeaths = document.querySelector('#finalDeaths');
@@ -43,6 +45,7 @@
   let messageTimer = 0;
   let messageQueue = [];
   let transitionTimer = null;
+  let pendingDeath = null;
   let cameraX = 0;
   let activeCheckpoint = null;
   const levelMemory = new Map();
@@ -80,6 +83,7 @@
   function initLevel(index, preserveMessage = false, spawnOverride = null) {
     clearTimeout(transitionTimer);
     transitionTimer = null;
+    pendingDeath = null;
     deathPanel.hidden = true;
     if (!preserveMessage) {
       messageQueue = [];
@@ -152,7 +156,7 @@
     for (const sp of state.spikes) {
       if (!sp.active || sp.hidden) continue;
       const dangerBox = { x: sp.x + 5, y: sp.y + 5, w: sp.w - 10, h: sp.h - 5 };
-      if (hit(player, dangerBox)) die(state.spikeDeath || '碰到尖刺了。');
+      if (hit(player, dangerBox)) die(sp.death || state.spikeDeath || '碰到尖刺了。');
     }
 
     if (player.y > H + 80 || player.x < -100 || player.x > (state.width || W) + 100) die('你離開了關卡範圍。');
@@ -246,6 +250,7 @@
 
   function die(reason) {
     if (player.dead) return;
+    const presentation = typeof reason === 'string' ? { reason } : reason;
     state.memory.deaths = (state.memory.deaths || 0) + 1;
     const taunt = state.memory.deaths > 5 && !state.memory.tauntShown ? state.taunt : null;
     if (taunt) state.memory.tauntShown = true;
@@ -256,15 +261,23 @@
     messageTimer = 0;
     message.classList.remove('visible');
     seenStory.clear();
-    deathReason.textContent = reason;
+    deathTitle.textContent = presentation.title || '你死了';
+    deathReason.textContent = presentation.reason || '你死了。';
+    deathComment.textContent = presentation.comment || '';
+    deathComment.hidden = !presentation.comment;
+    deathPanel.dataset.variant = presentation.variant || 'default';
     deathPanel.hidden = false;
     tone(70, .22);
     for (let i = 0; i < 14; i++) particles.push({ x: player.x + 14, y: player.y + 14, vx: (Math.random() - .5) * 380, vy: -Math.random() * 330, life: .65 + Math.random() * .3 });
     const respawn = activeCheckpoint ? { ...activeCheckpoint } : null;
-    transitionTimer = setTimeout(() => {
-      initLevel(levelIndex, false, respawn);
-      if (taunt) say(`提示：${taunt}`);
-    }, 900);
+    pendingDeath = { respawn, taunt };
+  }
+
+  function continueAfterDeath() {
+    if (!pendingDeath || !player?.dead || deathPanel.hidden) return;
+    const { respawn, taunt } = pendingDeath;
+    initLevel(levelIndex, false, respawn);
+    if (taunt) say(`提示：${taunt}`);
   }
 
   function completeLevel() {
@@ -651,6 +664,7 @@
   });
 
   chapterOneButton.addEventListener('click', startChapterOne);
+  deathPanel.addEventListener('click', continueAfterDeath);
   chapterTwoButton.addEventListener('click', () => {
     if (chapterOneComplete) chapterNotice.textContent = '第二章仍是？？？，關卡正在製作中。';
   });
