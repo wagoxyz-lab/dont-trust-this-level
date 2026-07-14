@@ -32,6 +32,12 @@
     <section class="stage" aria-label="遊戲區域">
       <canvas id="game" width="960" height="540"></canvas>
       <div id="message" class="message" aria-live="polite"></div>
+      <div id="systemErrorPanel" class="system-error-panel" role="alert" aria-live="assertive" hidden>
+        <p class="eyebrow">SYSTEM ERROR</p>
+        <h2>關卡不存在</h2>
+        <p>LEVEL_1-5 已被刪除</p>
+        <p class="system-error-code">正在恢復章節流程……</p>
+      </div>
       <div id="deathPanel" class="death-panel" role="status" aria-live="assertive" hidden>
         <p class="eyebrow">死亡原因</p>
         <h2 id="deathTitle">你死了</h2>
@@ -51,7 +57,7 @@
               <button id="chapterOneButton" class="chapter-button chapter-button-active" type="button">
                 <span class="chapter-number">01</span>
                 <span class="chapter-name">新手教學</span>
-                <span class="chapter-status">4 關 · 開始</span>
+                <span class="chapter-status">5 關 · 開始</span>
               </button>
             </li>
             <li>
