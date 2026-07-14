@@ -18,10 +18,10 @@
 
     const deathTaunts = {
       'tutorial-move': '這關的陷阱是希望你會走路。',
+      'tutorial-traps': '我介紹的是尖刺，不是讓你收集尖刺。',
       'tutorial-jump': '缺口沒有變寬，你倒是掉得越來越準。',
       'tutorial-pause': '白框只是白框，是你自己第六次相信它。',
-      'tutorial-missing-door': '門已經回去等你了，它甚至沒有不耐煩。',
-      'tutorial-cracks': '有裂痕的那塊至少沒有騙你。'
+      'tutorial-missing-door': '門已經回去等你了，它甚至沒有不耐煩。'
     };
 
     const level = (id, title, build) => Object.assign(
@@ -80,7 +80,58 @@
           s.lastTeleportAt = time;
           s.waitingComment = false;
           s.touchReadyAt = time + .35;
-          say(s.doorDialogues[index]);
+          say(s.doorDialogues[index], 0, true);
+        }
+      })),
+
+      level('tutorial-traps', '認識陷阱', () => ({
+        hint: '前面的紅色尖刺是陷阱。碰到就會死亡。',
+        spikeDeath: '你碰到了尖刺。它們通常不會先自我介紹。',
+        spawn: [70, 418],
+        goal: { x: 870, y: 384, w: 46, h: 76 },
+        platforms: [platform(0, FLOOR_Y, W, 80)],
+        spikes: [
+          spike(350, 432, 40, 28, {
+            death: {
+              title: '這也撞得到？',
+              reason: '你碰到了第一根尖刺。',
+              comment: '它一直都在那裡。',
+              variant: 'careless'
+            }
+          }),
+          spike(500, 432, 40, 28, {
+            hidden: true,
+            death: {
+              title: '上當了',
+              reason: '第二根尖刺突然出現。',
+              comment: '我確實只介紹了第一根。',
+              variant: 'tricked'
+            }
+          })
+        ],
+        update(s) {
+          const player = getPlayer();
+          const hiddenSpike = s.spikes[1];
+          const playerCenter = player.x + player.w / 2;
+
+          if (player.x > 170 && !s.firstInstruction) {
+            s.firstInstruction = true;
+            say('先跳過你看得到的那一個。', 0, true);
+          }
+          if (
+            hiddenSpike.hidden &&
+            playerCenter >= hiddenSpike.x &&
+            playerCenter <= hiddenSpike.x + hiddenSpike.w
+          ) {
+            hiddenSpike.hidden = false;
+            say('我只介紹了第一個。', 0, true);
+            tone(180, .06);
+          }
+          if (player.x > 560 && !s.passedSpikes) {
+            s.passedSpikes = true;
+            say('很好。現在你認識陷阱了。');
+            return;
+          }
         }
       })),
 
@@ -88,7 +139,7 @@
         hint: '接下來認識跳躍。先跳上第一個平台。',
         spikeDeath: '沒有跳到平台上。',
         spawn: [70, 418],
-        goal: { x: 860, y: 384, w: 46, h: 76 },
+        goal: { x: 860, y: 384, w: 46, h: 76, locked: true },
         firstPlatformIndex: 1,
         trickPlatformIndex: 2,
         platforms: [
@@ -106,17 +157,18 @@
 
           if (standingOn(player, firstPlatform) && !s.firstLanding) {
             s.firstLanding = true;
-            say('很好。下一塊看起來也差不多。');
+            say('很好。下一塊看起來也差不多。', 0, true);
           }
-          if (s.firstLanding && !s.platformDodged && !player.grounded && player.vx > 80 && player.x > 310) {
+          if (!s.platformDodged && !player.grounded && player.vx > 80 && player.x > 310) {
             s.platformDodged = true;
             trickPlatform.x += 60;
-            say('……它剛才是不是也跳了一下？');
+            say('……它剛才是不是也跳了一下？', 0, true);
             tone(240, .06);
           }
           if (s.platformDodged && standingOn(player, trickPlatform) && !s.caughtPlatform) {
             s.caughtPlatform = true;
-            say('你追上它了。繼續往門走。');
+            s.goal.locked = false;
+            say('你追上它了。繼續往門走。', 0, true);
           }
         }
       })),
@@ -197,47 +249,6 @@
           if (s.goal.hidden && s.tutorialStarted && time - s.tutorialAt >= 3.2 && !s.jumpHinted) {
             s.jumpHinted = true;
             say('說到跳躍，可以多跳幾下。');
-          }
-        }
-      })),
-
-      level('tutorial-cracks', '裂痕', () => ({
-        hint: '有裂痕的平台，看起來不太牢靠。',
-        spikeDeath: '看起來正常，不代表會接住你。',
-        spawn: [55, 418],
-        goal: { x: 865, y: 384, w: 46, h: 76 },
-        lessonIndex: 1,
-        betrayalIndex: 2,
-        platforms: [
-          platform(0, FLOOR_Y, 250, 80),
-          platform(300, 410, 130, 24, { cracked: true }),
-          platform(470, 410, 80, 24),
-          platform(575, 410, 135, 24),
-          platform(760, FLOOR_Y, 200, 80)
-        ],
-        spikes: [spike(250, 512, 510, 28)],
-        update(s) {
-          const player = getPlayer();
-          const lesson = s.platforms[s.lessonIndex];
-          const betrayal = s.platforms[s.betrayalIndex];
-          const onLesson = standingOn(player, lesson);
-          const onBetrayal = standingOn(player, betrayal);
-
-          if (onLesson) s.lessonTouched = true;
-          if (s.lessonTouched && !onLesson && lesson.active) {
-            lesson.active = false;
-            tone(100, .06);
-          }
-          if (onBetrayal) {
-            betrayal.active = false;
-            player.grounded = false;
-            player.vx *= .25;
-            player.vy = 170;
-            if (!s.betrayed) {
-              s.betrayed = true;
-              say('……沒裂痕的那塊才掉了。');
-            }
-            tone(85, .08);
           }
         }
       }))
