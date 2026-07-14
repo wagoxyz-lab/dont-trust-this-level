@@ -14,15 +14,30 @@
       <h1>遊戲數據台</h1>
     </div>
     <div class="header-actions">
-      <span class="mode-badge"><span></span>本機測試數據</span>
+      <span id="modeBadge" class="mode-badge"><span></span>安全連線</span>
+      <button id="signOutButton" class="game-link button-link" type="button" hidden>登出</button>
       <a class="game-link" href="index.html">返回遊戲</a>
     </div>
   </header>
 
-  <main class="admin-main">
+  <main id="loginView" class="login-main">
+    <section class="login-panel">
+      <p class="eyebrow">OWNER ACCESS</p>
+      <h2>管理員登入</h2>
+      <p>統計資料受到登入驗證保護。系統會寄送一次性登入連結到管理員信箱。</p>
+      <form id="loginForm">
+        <label for="adminEmail">管理員 Email</label>
+        <input id="adminEmail" name="email" type="email" autocomplete="email" readonly>
+        <button id="loginButton" class="login-button" type="submit">寄送登入連結</button>
+      </form>
+      <p id="loginMessage" class="login-message" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <main id="dashboardView" class="admin-main" hidden>
     <section class="notice" aria-label="資料模式說明">
-      <strong>目前顯示這台裝置的測試數據</strong>
-      <span>雲端資料接口已預留；接上統計服務後，這裡會顯示所有線上玩家。</span>
+      <strong>全站即時數據</strong>
+      <span>匿名統計所有公開遊戲訪客，不收集姓名、Email 或 IP 位址。</span>
     </section>
 
     <section class="metrics" aria-label="關鍵指標">
@@ -77,13 +92,14 @@
           <p class="eyebrow">FUNNEL</p>
           <h2>玩家流程</h2>
         </div>
-        <button id="clearDataButton" class="clear-button" type="button">清除測試數據</button>
+        <span id="lastUpdated" class="last-updated">尚未同步</span>
       </div>
       <div id="funnel" class="funnel"></div>
     </section>
   </main>
 
-  <script src="analytics.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="cloud-config.js"></script>
   <script src="admin.js"></script>
 </body>
 </html>
