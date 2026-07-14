@@ -8,6 +8,15 @@
   const chapterTwoButton = document.querySelector('#chapterTwoButton');
   const chapterTwoName = document.querySelector('#chapterTwoName');
   const chapterTwoStatus = document.querySelector('#chapterTwoStatus');
+  const chapterThreeButton = document.querySelector('#chapterThreeButton');
+  const chapterThreeName = document.querySelector('#chapterThreeName');
+  const chapterThreeStatus = document.querySelector('#chapterThreeStatus');
+  const chapterFourButton = document.querySelector('#chapterFourButton');
+  const chapterFourName = document.querySelector('#chapterFourName');
+  const chapterFourStatus = document.querySelector('#chapterFourStatus');
+  const chapterFiveButton = document.querySelector('#chapterFiveButton');
+  const chapterFiveName = document.querySelector('#chapterFiveName');
+  const chapterFiveStatus = document.querySelector('#chapterFiveStatus');
   const chapterNotice = document.querySelector('#chapterNotice');
   const checkpointPanel = document.querySelector('#checkpointPanel');
   const chapterReturnButton = document.querySelector('#chapterReturnButton');
@@ -52,12 +61,15 @@
   let messageQueue = [];
   let transitionTimer = null;
   let pendingDeath = null;
+  let progressEligible = false;
   let cameraX = 0;
   let activeCheckpoint = null;
   const levelMemory = new Map();
   const seenStory = new Set();
-  const chapterProgressKey = 'dont-trust-this-level:chapter-1:v3';
-  let chapterOneComplete = loadChapterProgress();
+  const chapterProgressKey = 'dont-trust-this-level:chapters:v3';
+  const previousChapterProgressKey = 'dont-trust-this-level:chapters:v1';
+  const legacyChapterProgressKey = 'dont-trust-this-level:chapter-1:v3';
+  let completedThrough = loadChapterProgress();
 
   const platform = (x, y, w, h = 24, extra = {}) => ({ x, y, w, h, active: true, ...extra });
   const spike = (x, y, w = 34, h = 28, extra = {}) => ({ x, y, w, h, active: true, ...extra });
@@ -82,7 +94,10 @@
   };
   const chapters = [
     { number: 1, title: '新手教學', factories: window.createGameLevels(levelApi) },
-    { number: 2, title: '新手教學成果驗收', factories: window.createChapterTwoLevels(levelApi) }
+    { number: 2, title: '新手教學成果驗收', factories: window.createChapterTwoLevels(levelApi) },
+    { number: 3, title: '正式開始', factories: window.createChapterThreeLevels(levelApi) },
+    { number: 4, title: '偏差', factories: window.createChapterFourLevels(levelApi) },
+    { number: 5, title: '變異', factories: window.createChapterFiveLevels(levelApi) }
   ];
   let activeChapterIndex = 0;
   let levelFactories = chapters[activeChapterIndex].factories;
@@ -96,7 +111,6 @@
         : `${chapter.number}-${index + 1}`;
       option.dataset.chapter = String(chapterIndex);
       option.dataset.secret = factory.secret ? 'true' : 'false';
-      option.disabled = Boolean(factory.secret || (chapterIndex > 0 && !chapterOneComplete));
       levelSelect.append(option);
     });
   });
@@ -133,7 +147,7 @@
     const chapter = chapters[activeChapterIndex];
     levelLabel.textContent = `第 ${chapter.number} 章 · ${chapter.number}-${index + 1}/${levelFactories.length} · ${state.title}`;
     levelSelect.value = `${activeChapterIndex}:${index}`;
-    if (!preserveMessage) say(state.hint);
+    if (!preserveMessage) say(state.hint, state.persistentHint ? Infinity : 0);
   }
 
   function updateCrumble(s, dt) {
@@ -321,10 +335,7 @@
         chapter: chapters[activeChapterIndex].number,
         deaths
       });
-      if (activeChapterIndex === 0) {
-        chapterOneComplete = true;
-        saveChapterProgress();
-      }
+      if (progressEligible) markChapterComplete(chapters[activeChapterIndex].number);
       updateChapterLocks();
       transitionTimer = setTimeout(showChapterComplete, 500);
     } else {
@@ -334,13 +345,17 @@
 
   function showChapterComplete() {
     const chapter = chapters[activeChapterIndex];
+    const candidate = chapters[activeChapterIndex + 1];
+    const nextChapter = candidate?.number === chapter.number + 1 ? candidate : null;
     finalDeaths.textContent = deaths;
-    finishEyebrow.textContent = activeChapterIndex === chapters.length - 1 ? '目前進度' : '章節完成';
-    finishTitle.textContent = activeChapterIndex === 0 ? '第一章完成' : '第二章目前完成';
-    finishSummary.textContent = activeChapterIndex === 0
-      ? '第二章「新手教學成果驗收」已解鎖。'
-      : '目前開放至 2-5，後續驗收會逐關加入。';
-    againButton.textContent = `重玩第${chapter.number === 1 ? '一' : '二'}章`;
+    finishEyebrow.textContent = progressEligible ? (nextChapter ? '章節完成' : '目前進度') : '跳關測試';
+    finishTitle.textContent = progressEligible ? `第${chapterNumberText(chapter.number)}章完成` : `${chapter.number}-${levelFactories.length} 測試完成`;
+    finishSummary.textContent = progressEligible
+      ? (nextChapter
+          ? `第${nextChapter.number}章「${nextChapter.title}」已解鎖。`
+          : `目前開放至 ${chapter.number}-${chapter.factories.length}，後續章節仍未開放。`)
+      : '開發跳關不會保存章節進度。';
+    againButton.textContent = `重玩第${chapterNumberText(chapter.number)}章`;
     checkpointPanel.hidden = false;
   }
 
@@ -354,10 +369,12 @@
     systemErrorPanel.hidden = false;
     tone(75, .28);
     transitionTimer = setTimeout(() => {
-      chapterOneComplete = true;
-      saveChapterProgress();
-      updateChapterLocks();
-      startChapter(1);
+      const bypassLock = !progressEligible;
+      if (progressEligible) {
+        markChapterComplete(1);
+        updateChapterLocks();
+      }
+      startChapter(1, bypassLock);
     }, 2400);
   }
 
@@ -405,8 +422,128 @@
     for (let y = 20; y <= H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(worldWidth, y); ctx.stroke(); }
   }
 
+  function drawWithVisualTransform(object, renderer) {
+    const angle = Number.isFinite(object.visualRotation) ? object.visualRotation : 0;
+    const offsetX = Number.isFinite(object.visualOffsetX) ? object.visualOffsetX : 0;
+    const offsetY = Number.isFinite(object.visualOffsetY) ? object.visualOffsetY : 0;
+    const scaleX = boundedVisualScale(object.visualScaleX);
+    const scaleY = boundedVisualScale(object.visualScaleY);
+    const skewX = boundedVisualSkew(object.visualSkewX);
+    const skewY = boundedVisualSkew(object.visualSkewY);
+    const alpha = Number.isFinite(object.visualAlpha)
+      ? Math.max(.08, Math.min(1, object.visualAlpha))
+      : 1;
+    const centerX = object.x + object.w / 2;
+    const centerY = object.y + object.h / 2;
+    ctx.save();
+    ctx.globalAlpha = (Number.isFinite(ctx.globalAlpha) ? ctx.globalAlpha : 1) * alpha;
+    ctx.translate(centerX + offsetX, centerY + offsetY);
+    ctx.rotate(angle);
+    ctx.transform(1, skewY, skewX, 1, 0, 0);
+    ctx.scale(scaleX, scaleY);
+    ctx.translate(-centerX, -centerY);
+    renderer(object);
+    ctx.restore();
+  }
+
+  function boundedVisualScale(value) {
+    if (!Number.isFinite(value)) return 1;
+    const sign = value < 0 ? -1 : 1;
+    return sign * Math.max(.35, Math.min(2.2, Math.abs(value)));
+  }
+
+  function boundedVisualSkew(value) {
+    return Number.isFinite(value) ? Math.max(-.7, Math.min(.7, value)) : 0;
+  }
+
+  function drawVisualCopies(object, renderer) {
+    for (const echo of object.visualEchoes || []) {
+      const copy = { ...object, ...echo, visualEchoes: null };
+      drawWithVisualTransform(copy, visualRenderer(copy.visualKind, renderer));
+    }
+    const activeRenderer = visualRenderer(object.visualKind, renderer);
+    const glitch = getVisualGlitch(object);
+    if (!glitch) {
+      drawWithVisualTransform(object, activeRenderer);
+      return;
+    }
+
+    const baseAlpha = Number.isFinite(object.visualAlpha) ? object.visualAlpha : 1;
+    drawWithVisualTransform({
+      ...object,
+      visualAlpha: baseAlpha * (.82 - glitch.strength * .12)
+    }, activeRenderer);
+
+    const sliceCount = glitch.strength >= .46 ? 2 : 1;
+    for (let index = 0; index < sliceCount; index++) {
+      drawGlitchSlice(object, activeRenderer, glitch, index);
+    }
+  }
+
+  function getVisualGlitch(object) {
+    const strength = Number.isFinite(object.visualGlitch)
+      ? Math.max(0, Math.min(1, object.visualGlitch))
+      : 0;
+    if (strength <= 0) return null;
+
+    const defaultPeriod = 3.9 - strength * 2.2;
+    const period = Number.isFinite(object.visualGlitchPeriod)
+      ? Math.max(.8, Math.min(8, object.visualGlitchPeriod))
+      : defaultPeriod;
+    const defaultDuration = .055 + strength * .12;
+    const duration = Number.isFinite(object.visualGlitchDuration)
+      ? Math.max(.04, Math.min(Math.min(.26, period * .3), object.visualGlitchDuration))
+      : defaultDuration;
+    const phaseOffset = Number.isFinite(object.visualGlitchPhase) ? object.visualGlitchPhase : 0;
+    const cycle = ((levelTime + phaseOffset) % period + period) % period;
+    if (cycle >= duration) return null;
+
+    return {
+      strength,
+      frame: Math.floor(cycle / .025)
+    };
+  }
+
+  function drawGlitchSlice(object, renderer, glitch, index) {
+    const frameSeed = glitch.frame * 37 + index * 53;
+    const sliceHeight = Math.max(5, Math.min(object.h, object.h * (.28 + glitch.strength * .12)));
+    const availableY = Math.max(0, object.h - sliceHeight);
+    const sliceY = object.y + (frameSeed % 101) / 100 * availableY;
+    const direction = (glitch.frame + index) % 2 === 0 ? 1 : -1;
+    const shift = direction * (2 + Math.round(glitch.strength * 5) + index);
+    const baseAlpha = Number.isFinite(object.visualAlpha) ? object.visualAlpha : 1;
+    const copy = {
+      ...object,
+      visualEchoes: null,
+      visualOffsetX: (Number.isFinite(object.visualOffsetX) ? object.visualOffsetX : 0) + shift,
+      visualOffsetY: (Number.isFinite(object.visualOffsetY) ? object.visualOffsetY : 0) - direction,
+      visualAlpha: baseAlpha * (.3 + glitch.strength * .16)
+    };
+
+    ctx.save();
+    try {
+      ctx.beginPath();
+      ctx.rect(object.x - 12, sliceY, object.w + 24, sliceHeight);
+      ctx.clip();
+      drawWithVisualTransform(copy, renderer);
+    } finally {
+      ctx.restore();
+    }
+  }
+
+  function visualRenderer(kind, fallback) {
+    if (kind === 'platform') return drawPlatformBody;
+    if (kind === 'spike') return drawSpikesBody;
+    if (kind === 'goal') return drawGoalBody;
+    return fallback;
+  }
+
   function drawPlatform(p) {
     if (!p.active || p.invisible) return;
+    drawVisualCopies(p, drawPlatformBody);
+  }
+
+  function drawPlatformBody(p) {
     if (p.invisibleVisual) {
       if (p.hintOutline) {
         ctx.save();
@@ -459,13 +596,17 @@
 
   function drawSpikes(sp) {
     if (sp.hidden || (!sp.active && !sp.vanishing)) return;
+    drawVisualCopies(sp, drawSpikesBody);
+  }
+
+  function drawSpikesBody(sp) {
     const vanishRatio = sp.vanishing
       ? Math.max(0, sp.vanishTimer / sp.vanishDuration)
       : 1;
     const count = Math.max(1, Math.round(sp.w / 28));
     const sw = sp.w / count;
     ctx.save();
-    ctx.globalAlpha = sp.vanishing ? Math.max(.15, vanishRatio) : 1;
+    ctx.globalAlpha = (Number.isFinite(ctx.globalAlpha) ? ctx.globalAlpha : 1) * (sp.vanishing ? Math.max(.15, vanishRatio) : 1);
     ctx.fillStyle = sp.vanishing && Math.floor(elapsed * 28) % 2 === 0
       ? colors.acid
       : sp.vanishing ? colors.solid : colors.danger;
@@ -485,6 +626,10 @@
 
   function drawGoal(g) {
     if (g.hidden || g.active === false) return;
+    drawVisualCopies(g, drawGoalBody);
+  }
+
+  function drawGoalBody(g) {
     ctx.fillStyle = g.locked ? colors.danger : colors.acid; ctx.fillRect(g.x, g.y, g.w, g.h);
     ctx.fillStyle = colors.ink; ctx.fillRect(g.x + 8, g.y + 10, g.w - 16, g.h - 10);
     ctx.fillStyle = g.locked ? colors.danger : colors.acid; ctx.fillRect(g.x + g.w - 15, g.y + 38, 5, 5);
@@ -686,41 +831,63 @@
 
   function loadChapterProgress() {
     try {
-      return window.localStorage?.getItem(chapterProgressKey) === 'complete';
+      const storedValues = [chapterProgressKey, previousChapterProgressKey]
+        .map(key => Number.parseInt(window.localStorage?.getItem(key) || '', 10))
+        .filter(value => Number.isFinite(value) && value >= 0);
+      if (window.localStorage?.getItem(legacyChapterProgressKey) === 'complete') storedValues.push(1);
+      return storedValues.length ? Math.max(...storedValues) : 0;
     } catch {
-      return false;
+      return 0;
     }
   }
 
-  function saveChapterProgress() {
+  function markChapterComplete(chapterNumber) {
+    completedThrough = Math.max(completedThrough, chapterNumber);
     try {
-      window.localStorage?.setItem(chapterProgressKey, 'complete');
+      window.localStorage?.setItem(chapterProgressKey, String(completedThrough));
+      if (completedThrough >= 1) window.localStorage?.setItem(legacyChapterProgressKey, 'complete');
     } catch {
       // Progress remains available for the current session.
     }
   }
 
-  function updateChapterLocks() {
-    chapterTwoButton.disabled = !chapterOneComplete;
-    chapterTwoButton.classList.remove('chapter-button-active');
-    if (chapterOneComplete) chapterTwoButton.classList.add('chapter-button-active');
-    chapterTwoName.textContent = chapterOneComplete ? chapters[1].title : '？？？';
-    chapterTwoStatus.textContent = chapterOneComplete
-      ? `${chapters[1].factories.length} 關 · 開始`
-      : '請先完成前置關卡';
-    chapterNotice.textContent = chapterOneComplete
-      ? '第二章「新手教學成果驗收」已解鎖。'
-      : '完成第一章後，其他章節才會開放。';
-    levelSelect.querySelectorAll('option').forEach(option => {
-      const chapterIndex = Number(option.dataset.chapter);
-      const secret = option.dataset.secret === 'true';
-      option.disabled = secret || (chapterIndex > 0 && !chapterOneComplete);
-    });
+  function isChapterUnlocked(chapterIndex) {
+    return chapterIndex === 0 || completedThrough >= chapters[chapterIndex].number - 1;
   }
 
-  function startChapter(chapterIndex) {
-    if (chapterIndex > 0 && !chapterOneComplete) {
-      chapterNotice.textContent = '請先完成第一章。';
+  function chapterNumberText(number) {
+    return ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'][number] || String(number);
+  }
+
+  function updateChapterLocks() {
+    const chapterControls = [
+      { index: 1, button: chapterTwoButton, name: chapterTwoName, status: chapterTwoStatus },
+      { index: 2, button: chapterThreeButton, name: chapterThreeName, status: chapterThreeStatus },
+      { index: 3, button: chapterFourButton, name: chapterFourName, status: chapterFourStatus },
+      { index: 4, button: chapterFiveButton, name: chapterFiveName, status: chapterFiveStatus }
+    ];
+    chapterControls.forEach(control => {
+      const chapter = chapters[control.index];
+      const unlocked = isChapterUnlocked(control.index);
+      control.button.disabled = !unlocked;
+      control.button.classList.remove('chapter-button-active');
+      if (unlocked) control.button.classList.add('chapter-button-active');
+      control.name.textContent = unlocked ? chapter.title : '？？？';
+      control.status.textContent = unlocked
+        ? `${chapter.factories.filter(factory => !factory.secret).length} 關 · 開始`
+        : '請先完成前置關卡';
+    });
+    if (completedThrough >= 5) chapterNotice.textContent = '目前開放至第五章，後續章節尚未開放。';
+    else if (isChapterUnlocked(4)) chapterNotice.textContent = '第五章「變異」已解鎖。';
+    else if (isChapterUnlocked(3)) chapterNotice.textContent = '第四章「偏差」已解鎖。';
+    else if (isChapterUnlocked(2)) chapterNotice.textContent = '第三章「正式開始」已解鎖。';
+    else if (isChapterUnlocked(1)) chapterNotice.textContent = '第二章「新手教學成果驗收」已解鎖。';
+    else chapterNotice.textContent = '完成第一章後，其他章節才會開放。';
+  }
+
+  function startChapter(chapterIndex, bypassLock = false) {
+    if (!bypassLock && !isChapterUnlocked(chapterIndex)) {
+      chapterNotice.textContent = `請先完成第${chapterNumberText(chapters[chapterIndex].number - 1)}章。`;
       return;
     }
     activeChapterIndex = Math.max(0, Math.min(chapters.length - 1, chapterIndex));
@@ -729,6 +896,7 @@
     deaths = 0;
     levelMemory.clear();
     seenStory.clear();
+    progressEligible = !bypassLock;
     deathCount.textContent = '0';
     chapterNotice.textContent = '';
     started = true;
@@ -756,6 +924,7 @@
   }
 
   function jumpToLevel(index) {
+    progressEligible = false;
     levelIndex = Math.max(0, Math.min(levelFactories.length - 1, index));
     started = true;
     chapterPanel.hidden = true;
@@ -766,10 +935,6 @@
   }
 
   function jumpToChapterLevel(chapterIndex, index) {
-    if (chapterIndex > 0 && !chapterOneComplete) {
-      levelSelect.value = `${activeChapterIndex}:${levelIndex}`;
-      return;
-    }
     activeChapterIndex = Math.max(0, Math.min(chapters.length - 1, chapterIndex));
     levelFactories = chapters[activeChapterIndex].factories;
     jumpToLevel(index);
@@ -825,9 +990,21 @@
   chapterOneButton.addEventListener('click', startChapterOne);
   deathPanel.addEventListener('click', continueAfterDeath);
   chapterTwoButton.addEventListener('click', () => {
-    if (chapterOneComplete) startChapter(1);
+    if (isChapterUnlocked(1)) startChapter(1);
   });
-  againButton.addEventListener('click', () => startChapter(activeChapterIndex));
+  chapterThreeButton.addEventListener('click', () => {
+    if (isChapterUnlocked(2)) startChapter(2);
+  });
+  chapterFourButton.addEventListener('click', () => {
+    if (isChapterUnlocked(3)) startChapter(3);
+  });
+  chapterFiveButton.addEventListener('click', () => {
+    if (isChapterUnlocked(4)) startChapter(4);
+  });
+  againButton.addEventListener('click', () => {
+    if (isChapterUnlocked(activeChapterIndex)) startChapter(activeChapterIndex);
+    else jumpToChapterLevel(activeChapterIndex, 0);
+  });
   chapterReturnButton.addEventListener('click', showChapterSelect);
   document.querySelector('#restartButton').addEventListener('click', () => { if (started) initLevel(levelIndex); });
   document.querySelector('#soundButton').addEventListener('click', () => { soundOn = !soundOn; soundIcon.textContent = soundOn ? '♪' : '×'; });
