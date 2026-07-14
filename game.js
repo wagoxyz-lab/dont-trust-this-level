@@ -6,10 +6,15 @@
   const chapterPanel = document.querySelector('#chapterPanel');
   const chapterOneButton = document.querySelector('#chapterOneButton');
   const chapterTwoButton = document.querySelector('#chapterTwoButton');
+  const chapterTwoName = document.querySelector('#chapterTwoName');
   const chapterTwoStatus = document.querySelector('#chapterTwoStatus');
   const chapterNotice = document.querySelector('#chapterNotice');
   const checkpointPanel = document.querySelector('#checkpointPanel');
   const chapterReturnButton = document.querySelector('#chapterReturnButton');
+  const againButton = document.querySelector('#againButton');
+  const finishEyebrow = document.querySelector('#finishEyebrow');
+  const finishTitle = document.querySelector('#finishTitle');
+  const finishSummary = document.querySelector('#finishSummary');
   const deathPanel = document.querySelector('#deathPanel');
   const deathTitle = document.querySelector('#deathTitle');
   const deathReason = document.querySelector('#deathReason');
@@ -50,19 +55,20 @@
   let activeCheckpoint = null;
   const levelMemory = new Map();
   const seenStory = new Set();
-  const chapterProgressKey = 'dont-trust-this-level:chapter-1';
+  const chapterProgressKey = 'dont-trust-this-level:chapter-1:v2';
   let chapterOneComplete = loadChapterProgress();
 
   const platform = (x, y, w, h = 24, extra = {}) => ({ x, y, w, h, active: true, ...extra });
   const spike = (x, y, w = 34, h = 28, extra = {}) => ({ x, y, w, h, active: true, ...extra });
 
-  const levelFactories = window.createGameLevels({
+  const levelApi = {
     W,
     FLOOR_Y,
     platform,
     spike,
     getPlayer: () => player,
     getLevelTime: () => levelTime,
+    isDialogueActive: () => messageTimer > 0 || messageQueue.length > 0,
     say,
     sayStory,
     tone,
@@ -71,13 +77,21 @@
     hit,
     updateCrumble,
     setLevelLabel: text => { levelLabel.textContent = text; }
-  });
+  };
+  const chapters = [
+    { number: 1, title: '新手教學', factories: window.createGameLevels(levelApi) },
+    { number: 2, title: '新手教學成果驗收', factories: window.createChapterTwoLevels(levelApi) }
+  ];
+  let activeChapterIndex = 0;
+  let levelFactories = chapters[activeChapterIndex].factories;
 
-  levelFactories.forEach((factory, index) => {
-    const option = document.createElement('option');
-    option.value = String(index);
-    option.textContent = `1-${index + 1}`;
-    levelSelect.append(option);
+  chapters.forEach((chapter, chapterIndex) => {
+    chapter.factories.forEach((factory, index) => {
+      const option = document.createElement('option');
+      option.value = `${chapterIndex}:${index}`;
+      option.textContent = `${chapter.number}-${index + 1}`;
+      levelSelect.append(option);
+    });
   });
 
   function initLevel(index, preserveMessage = false, spawnOverride = null) {
@@ -108,8 +122,9 @@
     levelTime = 0;
     particles = [];
     cameraX = Math.max(0, Math.min((state.width || W) - W, spawn[0] - W * .28));
-    levelLabel.textContent = `第一章 · ${index + 1}/${levelFactories.length} · ${state.title}`;
-    levelSelect.value = String(index);
+    const chapter = chapters[activeChapterIndex];
+    levelLabel.textContent = `第 ${chapter.number} 章 · ${chapter.number}-${index + 1}/${levelFactories.length} · ${state.title}`;
+    levelSelect.value = `${activeChapterIndex}:${index}`;
     if (!preserveMessage) say(state.hint);
   }
 
@@ -284,13 +299,31 @@
     if (player.dead) return;
     player.dead = true; tone(660, .08); setTimeout(() => tone(880, .12), 90);
     if (levelIndex === levelFactories.length - 1) {
-      chapterOneComplete = true;
-      saveChapterProgress();
+      window.gameAnalytics?.track('chapter_complete', {
+        chapter: chapters[activeChapterIndex].number,
+        deaths
+      });
+      if (activeChapterIndex === 0) {
+        chapterOneComplete = true;
+        saveChapterProgress();
+      }
       updateChapterLocks();
-      transitionTimer = setTimeout(() => { finalDeaths.textContent = deaths; checkpointPanel.hidden = false; }, 500);
+      transitionTimer = setTimeout(showChapterComplete, 500);
     } else {
       levelIndex += 1; transitionTimer = setTimeout(() => initLevel(levelIndex), 450);
     }
+  }
+
+  function showChapterComplete() {
+    const chapter = chapters[activeChapterIndex];
+    finalDeaths.textContent = deaths;
+    finishEyebrow.textContent = activeChapterIndex === chapters.length - 1 ? '目前進度' : '章節完成';
+    finishTitle.textContent = activeChapterIndex === 0 ? '第一章完成' : '第二章目前完成';
+    finishSummary.textContent = activeChapterIndex === 0
+      ? '第二章「新手教學成果驗收」已解鎖。'
+      : '目前開放至 2-1，後續驗收會逐關加入。';
+    againButton.textContent = `重玩第${chapter.number === 1 ? '一' : '二'}章`;
+    checkpointPanel.hidden = false;
   }
 
   function draw() {
@@ -605,13 +638,16 @@
     chapterTwoButton.disabled = !chapterOneComplete;
     chapterTwoButton.classList.remove('chapter-button-active');
     if (chapterOneComplete) chapterTwoButton.classList.add('chapter-button-active');
-    chapterTwoStatus.textContent = chapterOneComplete ? '下一章' : 'LOCKED';
+    chapterTwoName.textContent = chapterOneComplete ? chapters[1].title : '？？？';
+    chapterTwoStatus.textContent = chapterOneComplete ? '1 關 · 開始' : '請先完成前置關卡';
     chapterNotice.textContent = chapterOneComplete
-      ? '第二章已解鎖，關卡正在製作中。'
+      ? '第二章「新手教學成果驗收」已解鎖。'
       : '完成第一章後，其他章節才會開放。';
   }
 
-  function startChapterOne() {
+  function startChapter(chapterIndex) {
+    activeChapterIndex = Math.max(0, Math.min(chapters.length - 1, chapterIndex));
+    levelFactories = chapters[activeChapterIndex].factories;
     levelIndex = 0;
     deaths = 0;
     levelMemory.clear();
@@ -621,9 +657,16 @@
     started = true;
     chapterPanel.hidden = true;
     checkpointPanel.hidden = true;
+    window.gameAnalytics?.track('chapter_start', {
+      chapter: chapters[activeChapterIndex].number
+    });
     Object.keys(keys).forEach(key => { keys[key] = false; });
     initLevel(0);
     audio?.resume();
+  }
+
+  function startChapterOne() {
+    startChapter(0);
   }
 
   function showChapterSelect() {
@@ -645,6 +688,12 @@
     audio?.resume();
   }
 
+  function jumpToChapterLevel(chapterIndex, index) {
+    activeChapterIndex = Math.max(0, Math.min(chapters.length - 1, chapterIndex));
+    levelFactories = chapters[activeChapterIndex].factories;
+    jumpToLevel(index);
+  }
+
   const keyMap = { ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ArrowUp: 'jump', w: 'jump', W: 'jump', ' ': 'jump' };
   addEventListener('keydown', e => {
     if (keyMap[e.key]) { keys[keyMap[e.key]] = true; e.preventDefault(); }
@@ -658,22 +707,55 @@
 
   document.querySelectorAll('[data-control]').forEach(button => {
     const control = button.dataset.control;
-    const press = e => { e.preventDefault(); keys[control] = true; button.classList.add('pressed'); };
-    const release = e => { e.preventDefault(); keys[control] = false; button.classList.remove('pressed'); };
-    button.addEventListener('pointerdown', press); button.addEventListener('pointerup', release); button.addEventListener('pointercancel', release); button.addEventListener('pointerleave', release);
+    let activePointer = null;
+    const press = e => {
+      e.preventDefault();
+      if (activePointer !== null) return;
+      activePointer = e.pointerId;
+      button.setPointerCapture?.(e.pointerId);
+      keys[control] = true;
+      button.classList.add('pressed');
+    };
+    const release = e => {
+      if (activePointer !== e.pointerId) return;
+      e.preventDefault();
+      activePointer = null;
+      keys[control] = false;
+      button.classList.remove('pressed');
+    };
+    const reset = () => {
+      activePointer = null;
+      keys[control] = false;
+      button.classList.remove('pressed');
+    };
+    button.addEventListener('pointerdown', press);
+    button.addEventListener('pointerup', release);
+    button.addEventListener('pointercancel', release);
+    button.addEventListener('lostpointercapture', release);
+    button.addEventListener('contextmenu', e => e.preventDefault());
+    button.addEventListener('resetcontrol', reset);
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) return;
+    document.querySelectorAll('.touch-button').forEach(button => button.dispatchEvent(new Event('resetcontrol')));
   });
 
   chapterOneButton.addEventListener('click', startChapterOne);
   deathPanel.addEventListener('click', continueAfterDeath);
   chapterTwoButton.addEventListener('click', () => {
-    if (chapterOneComplete) chapterNotice.textContent = '第二章仍是？？？，關卡正在製作中。';
+    if (chapterOneComplete) startChapter(1);
   });
-  document.querySelector('#againButton').addEventListener('click', startChapterOne);
+  againButton.addEventListener('click', () => startChapter(activeChapterIndex));
   chapterReturnButton.addEventListener('click', showChapterSelect);
   document.querySelector('#restartButton').addEventListener('click', () => { if (started) initLevel(levelIndex); });
   document.querySelector('#soundButton').addEventListener('click', () => { soundOn = !soundOn; soundIcon.textContent = soundOn ? '♪' : '×'; });
-  levelSelect.addEventListener('change', () => jumpToLevel(Number(levelSelect.value)));
+  levelSelect.addEventListener('change', () => {
+    const [chapterIndex, index] = levelSelect.value.split(':').map(Number);
+    jumpToChapterLevel(chapterIndex, index);
+  });
   initLevel(0);
   updateChapterLocks();
+  window.gameAnalytics?.trackVisit();
   requestAnimationFrame(loop);
 })();
