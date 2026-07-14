@@ -172,7 +172,7 @@
             playerCenter <= hiddenSpike.x + hiddenSpike.w
           ) {
             hiddenSpike.hidden = false;
-            say('我還是只介紹了第一根。', 0, true);
+            say('驚喜。', 0, true);
             tone(180, .06);
           }
         }
@@ -246,7 +246,7 @@
 
           if (standingOn(player, firstPlatform) && !s.firstLanding) {
             s.firstLanding = true;
-            say('很好。下一塊也是普通的平台。', 0, true);
+            say('很好，繼續保持。', 0, true);
           }
 
           if (
@@ -466,14 +466,10 @@
           }
           s.screenShake = Math.max(0, (s.screenShake || 0) - dt);
 
-          if (player.x > 1310 && !s.reactionPassed) {
-            s.reactionPassed = true;
-            say('好。反應不等於重複。', 0, true);
-          }
         }
       })),
 
-      level('review-route', '路線驗收', () => ({
+      level('review-route', '綜合驗收 1', () => ({
         width: 2250,
         hint: '路線驗收。這次沒有岔路，一直往右。',
         taunt: '每個陷阱都只做同一件事，是你每次都重新相信它。',
@@ -666,7 +662,7 @@
         }
       })),
 
-      level('review-final', '綜合驗收', () => ({
+      level('review-final', '綜合驗收 2', () => ({
         width: 2600,
         hint: '綜合驗收。沒有新規則。移動、跳躍，到門。',
         taunt: '前一題的答案很好用。尤其是用在錯的地方。',
